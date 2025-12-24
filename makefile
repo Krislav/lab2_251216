@@ -1,14 +1,15 @@
 CC = g++
 CFLAGS = -Wall -Wextra -g
+LDFLAGS = -mwindows -lcomctl32
 
-SRCS = main.cpp \
+SRCS = WinMain.cpp \
        Interface.cpp \
-       Errors/Errors.cpp \
+       Errors/Errors.cpp
 
 HEADERS = Interface.hpp \
-		  IDictioanry/IDictioanry.hpp \
+          IDictionary/IDictionary.hpp \
           Red-Black Tree/RedBlackTree.hpp \
-          Errors/Errors.hpp \
+          Errors/Errors.hpp
 
 OBJS = $(SRCS:.cpp=.o)
 
@@ -19,7 +20,7 @@ TARGET = lab2
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 %.o: %.cpp $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@

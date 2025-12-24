@@ -43,7 +43,7 @@ public:
         }
     }
 
-    std::vector<std::pair<Tkey, TElement>> GetFullDictionary() {
+    std::vector<std::pair<Tkey, TElement>> GetFullDictionary() { //Возвращает вектор содержащий элементы словоря по возрастанию ключей
         return tree.InOrderTraversal();
     }
 };

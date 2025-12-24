@@ -5,6 +5,11 @@
 #include <string>
 #include <limits>
 
+extern std::string text;
+extern int page_size;
+extern bool is_size_in_words;
+extern IDictionary<std::string, int>* dictionary;
+
 void Menu();
 void EnterPageSize();
 void EnterText();
