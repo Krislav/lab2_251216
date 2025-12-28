@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include "Interface.hpp"
+#include "Tests\Tests.hpp"
 
 // std::string text;
 // int page_size = 0;
@@ -20,6 +21,7 @@ std::vector<std::wstring> g_words_storage;
 #define ID_PROCESS_BTN  105
 #define ID_LOAD_BTN     106
 #define ID_LISTVIEW     107
+#define ID_TESTS_BTN    108
 
 HWND hTextBox, hPageSize, hListView;
 HWND hWordsRadio, hCharsRadio;
@@ -27,6 +29,13 @@ HWND hWordsRadio, hCharsRadio;
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
+    AllocConsole();
+    
+    FILE* fDummy;
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
+    freopen_s(&fDummy, "CONIN$", "r", stdin);
+
     INITCOMMONCONTROLSEX icc{ sizeof(icc), ICC_LISTVIEW_CLASSES };
     InitCommonControlsEx(&icc);
 
@@ -294,6 +303,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             WS_VISIBLE | WS_CHILD,
             700, 260, 120, 30,
             hwnd, (HMENU)ID_LOAD_BTN, nullptr, nullptr);
+
+        CreateWindowW(L"BUTTON", L"Run Tests",
+            WS_VISIBLE | WS_CHILD,
+            570, 300, 250, 30,
+            hwnd, (HMENU)ID_TESTS_BTN, nullptr, nullptr);
         break;
 
     case WM_COMMAND:
@@ -308,6 +322,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetWindowTextW(hTextBox, w.c_str());
             break;
         }
+
+        case ID_TESTS_BTN:
+            TestAll(); 
+            MessageBoxW(hwnd, L"Tests completed! Check console output.", L"Tests", MB_OK | MB_ICONINFORMATION);
+            break;
         }
         break;
 

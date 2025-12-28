@@ -1,3 +1,4 @@
+#pragma once
 #include "..\Red-Black Tree\RedBlackTree.hpp"
 #include "..\Errors\Errors.hpp"
 

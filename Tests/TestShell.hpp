@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 
 void TestResultPrint(int result_of_test); 
