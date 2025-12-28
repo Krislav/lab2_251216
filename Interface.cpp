@@ -1,9 +1,9 @@
 #include "Interface.hpp"
 
-std::string text;
-int page_size = 0;
-bool is_size_in_words = true;
-IDictionary<std::string, int>* dictionary = new IDictionary<std::string, int>();
+// std::string text;
+// int page_size = 0;
+// bool is_size_in_words = true;
+// IDictionary<std::string, int>* dictionary = new IDictionary<std::string, int>();
 
 void Menu() {
     while (true) {

@@ -3,17 +3,16 @@ CFLAGS = -Wall -Wextra -g
 LDFLAGS = -mwindows -lcomctl32
 
 SRCS = WinMain.cpp \
-       Interface.cpp \
        Errors/Errors.cpp \
 	   Tests/Tests.cpp \
-	   Tests/TestShell.cpp
+	   Tests/TestShell.cpp \
 
-HEADERS = Interface.hpp \
-          IDictionary/IDictionary.hpp \
+HEADERS = IDictionary/IDictionary.hpp \
           Red-Black Tree/RedBlackTree.hpp \
           Errors/Errors.hpp \
 		  Tests/Tests.hpp \
-		  Tests/TestShell.hpp
+		  Tests/TestShell.hpp \
+		  Book/Book.hpp
 
 OBJS = $(SRCS:.cpp=.o)
 

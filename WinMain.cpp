@@ -3,14 +3,20 @@
 #include <commctrl.h>
 #include <string>
 #include <fstream>
-#include "Interface.hpp"
+#include <iostream>
+#include <vector>
+#include <limits>
+#include "Book\Book.hpp"
+#include "IDictionary\IDictionary.hpp"
 #include "Tests\Tests.hpp"
 
-// std::string text;
-// int page_size = 0;
-// bool is_size_in_words = true;
-// IDictionary<std::string, int>* dictionary = new IDictionary<std::string, int>();
+std::string text;
+int page_size = 0;
+bool is_size_in_words = true;
 std::vector<std::wstring> g_words_storage;
+Book myBook;
+int current_view_page = 1;
+bool sort_by_page = false;
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -23,8 +29,12 @@ std::vector<std::wstring> g_words_storage;
 #define ID_LISTVIEW     107
 #define ID_TESTS_BTN    108
 
+#define ID_LEFT_PAGE    201
+#define ID_RIGHT_PAGE   202
+
 HWND hTextBox, hPageSize, hListView;
 HWND hWordsRadio, hCharsRadio;
+HWND hPageCounter, hPrevBtn, hNextBtn;
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -114,199 +124,187 @@ std::string LoadTextFromFile(HWND hwnd) {
     std::getline(file, text);
     return text;
 }
+
+void AddRowToListView(int index, const std::wstring& word, const std::wstring& pages) {
+    LVITEMW item{};
+    item.mask = LVIF_TEXT;
+    item.iItem = index;
+    item.pszText = const_cast<LPWSTR>(word.c_str());
+    ListView_InsertItem(hListView, &item);
+
+    LVITEMW subItem{};
+    subItem.iSubItem = 1;
+    subItem.pszText = const_cast<LPWSTR>(pages.c_str());
+    SendMessageW(hListView, LVM_SETITEMTEXTW, index, (LPARAM)&subItem);
+}
+
 void FillListView(HWND hListView) {
+    SendMessage(hListView, WM_SETREDRAW, FALSE, 0); // Отключаем мерцание
     ListView_DeleteAllItems(hListView);
     g_words_storage.clear();
 
-    auto data = dictionary->GetFullDictionary();
+    if (!sort_by_page) {
+        auto data = myBook.GetFullDictionary();
+        for (int i = 0; i < (int)data.size(); i++) {
+            std::wstring word(data[i].first.begin(), data[i].first.end());
+            
+            std::string p_list = "";
+            for (size_t j = 0; j < data[i].second.size(); ++j) {
+                p_list += std::to_string(data[i].second[j]) + (j == data[i].second.size() - 1 ? "" : ", ");
+            }
+            std::wstring pages_w(p_list.begin(), p_list.end());
+            
+            g_words_storage.push_back(word);
+            g_words_storage.push_back(pages_w);
+            
+            AddRowToListView(i, g_words_storage[g_words_storage.size() - 2], g_words_storage.back());
+        }
+    } else {
+        int total_pages = myBook.GetTotalPages();
+        int item_index = 0;
 
-    for (int i = 0; i < (int)data.size(); i++) {
-        LVITEMW item{};
-        item.mask = LVIF_TEXT;
-        item.iItem = i;
+        for (int p = 1; p <= total_pages; ++p) {
+            std::vector<std::string> page_words = myBook.GetPage(p);
+            
+            std::sort(page_words.begin(), page_words.end());
 
-        std::wstring word(data[i].first.begin(), data[i].first.end());
-        std::wstring page = std::to_wstring(data[i].second);
+            for (const auto& w : page_words) {
+                std::wstring word(w.begin(), w.end());
+                std::wstring page_num = std::to_wstring(p);
 
-        g_words_storage.push_back(word);
-        g_words_storage.push_back(page);
+                g_words_storage.push_back(word);
+                g_words_storage.push_back(page_num);
 
-        item.pszText = (LPWSTR)g_words_storage[g_words_storage.size() - 2].c_str();
-        ListView_InsertItem(hListView, &item);
-
-        LVITEMW subItem{};
-        subItem.iSubItem = 1;
-        subItem.pszText = (LPWSTR)g_words_storage[g_words_storage.size() - 1].c_str();
-        SendMessageW(hListView, LVM_SETITEMTEXTW, i, (LPARAM)&subItem);
+                AddRowToListView(item_index++, g_words_storage[g_words_storage.size() - 2], g_words_storage.back());
+            }
+        }
     }
+
+    SendMessage(hListView, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(hListView, NULL, TRUE);
+}
+
+void UpdatePageDisplay() {
+    if (myBook.GetTotalPages() == 0) return;
+
+    std::vector<std::string> page_words = myBook.GetPage(current_view_page);
+    std::string page_text = "";
+    for (const auto& w : page_words) page_text += w + " ";
+
+    std::wstring w_page_text(page_text.begin(), page_text.end());
+    SetWindowTextW(hTextBox, w_page_text.c_str());
+
+    std::wstring counter = L"Page: " + std::to_wstring(current_view_page) + 
+                           L" / " + std::to_wstring(myBook.GetTotalPages());
+    SetWindowTextW(hPageCounter, counter.c_str());
+}
+
+std::vector<std::string> SplitStringToWords(const std::string& str) {
+    std::vector<std::string> words;
+    
+    size_t i = 0;
+    while (i < str.length()) {
+        while (i < str.length() && std::isspace(str[i])) {
+            i++;
+        }
+        
+        if (i >= str.length()) {
+            break;
+        }
+        
+        size_t start = i;
+        while (i < str.length() && !std::isspace(str[i])) {
+            i++;
+        }
+        
+        words.push_back(str.substr(start, i - start));
+    }
+    
+    return words;
 }
 
 void ProcessText(HWND hwnd) {
-    dictionary = new IDictionary<std::string, int>();
-
-    wchar_t buffer[8192];
-    GetWindowTextW(hTextBox, buffer, 8192);
-    std::wstring wtext(buffer);
-    text.assign(wtext.begin(), wtext.end());
-
-    page_size = GetDlgItemInt(hwnd, ID_PAGESIZE, nullptr, FALSE);
-    is_size_in_words = SendMessage(hWordsRadio, BM_GETCHECK, 0, 0) == BST_CHECKED;
-
-    std::vector<std::string> words = SplitStringToWords(text + " ");
-    int current_page = 1;
-    if (page_size != 0) { // Размер в словах
-        if (is_size_in_words) {
-            int i = 0;
-            int words_count = words.size();
-            int words_on_current_page = 0;
-            int two_thirds_page_size = (page_size * 2) / 3;
-
-            while (words_on_current_page < page_size / 2 && i < words_count) {
-                std::string word_key = words[i];
-                while (dictionary->ContainsKey(word_key)) {
-                    word_key += std::to_string(current_page);
-                }
-                dictionary->Add(word_key, current_page);
-                i++;
-                words_on_current_page++;
-            }
-            current_page++;
-            while (i < words_count) {
-                words_on_current_page = 0;
-                if (current_page % 10 != 0) {
-                    while (words_on_current_page < page_size && i < words_count) {
-                        std::string word_key = words[i];
-                        while (dictionary->ContainsKey(word_key)) {
-                            word_key += std::to_string(current_page);
-                        }
-                        dictionary->Add(word_key, current_page);
-                        i++;
-                        words_on_current_page++;
-                    }
-                }
-                else {
-                    while (words_on_current_page < two_thirds_page_size && i < words_count) {
-                        std::string word_key = words[i];
-                        while (dictionary->ContainsKey(word_key)) {
-                            word_key += std::to_string(current_page);
-                        }
-                        dictionary->Add(word_key, current_page);
-                        i++;
-                        words_on_current_page++;
-                    }
-                }
-                current_page++;
-            }
-        }
-        else { // Размер в символах
-            int i = 0;
-            int words_count = words.size();
-            int symbols_on_current_page = -1;
-            int two_thirds_page_size = (page_size * 2) / 3;
-
-            while (symbols_on_current_page < page_size / 2 && i < words_count) {
-                std::string word_key = words[i];
-                while (dictionary->ContainsKey(word_key)) {
-                    word_key += std::to_string(current_page);
-                    symbols_on_current_page -= std::to_string(current_page).length();
-                }
-                dictionary->Add(word_key, current_page);
-                symbols_on_current_page += words[i].size() + 1;
-                i++;
-            }
-            current_page++;
-            while (i < words_count) {
-                symbols_on_current_page = -1;
-                if (current_page % 10 != 0) {
-                    while (symbols_on_current_page < page_size && i < words_count) {
-                        std::string word_key = words[i];
-                        while (dictionary->ContainsKey(word_key)) {
-                            word_key += std::to_string(current_page);
-                            symbols_on_current_page -= std::to_string(current_page).length();
-                        }
-                        dictionary->Add(word_key, current_page);
-                        symbols_on_current_page += words[i].size() + 1;
-                        i++;
-                    }
-                }
-                else {
-                    while (symbols_on_current_page < two_thirds_page_size && i < words_count) {
-                        std::string word_key = words[i];
-                        while (dictionary->ContainsKey(word_key)) {
-                            word_key += std::to_string(current_page);
-                            symbols_on_current_page -= std::to_string(current_page).length();
-                        }
-                        dictionary->Add(word_key, current_page);
-                        symbols_on_current_page += words[i].size() + 1;
-                        i++;
-                    }
-                }
-                current_page++;
-            }
-        }
+    if (text.empty()) {
+        wchar_t buffer[8192];
+        GetWindowTextW(hTextBox, buffer, 8192);
+        std::wstring wtext(buffer);
+        text = std::string(wtext.begin(), wtext.end());
     }
-    else {
-        int words_count = words.size();
-        for (int i = 0; i < words_count; i++) {
-            std::string word_key = words[i];
-            while (dictionary->ContainsKey(word_key)) {
-                word_key += std::to_string(current_page);
-            }
-            dictionary->Add(word_key, current_page);
-        }
-    }
-    int s = dictionary->GetCount();
-    std::vector<std::pair<std::string, int>> ready_for_output = dictionary->GetFullDictionary();
-    for (int i = 0; i < s; i++) {
-        std::cout << "Word: " << ready_for_output[i].first << " Page: " << ready_for_output[i].second << "\n";
-    }
+
+    int page_size_val = GetDlgItemInt(hwnd, ID_PAGESIZE, nullptr, FALSE);
+    if (page_size_val <= 0) page_size_val = 10;
+
+    bool is_words = SendMessage(hWordsRadio, BM_GETCHECK, 0, 0) == BST_CHECKED;
+
+    std::vector<std::string> words_vec = SplitStringToWords(text);
+    
+    myBook.ProcessText(words_vec, page_size_val, is_words);
+
+    current_view_page = 1;
+    UpdatePageDisplay();
     FillListView(hListView);
 }
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE:
         CreateListView(hwnd);
-        
-        CreateWindowW(L"STATIC", L"Page size (words or symbols):",
-            WS_VISIBLE | WS_CHILD,
-            570, 155, 200, 20,
-            hwnd, nullptr, nullptr, nullptr);
 
         hTextBox = CreateWindowW(L"EDIT", L"",
-            WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE,
+            WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | ES_READONLY | WS_VSCROLL,
             570, 10, 300, 150,
             hwnd, (HMENU)ID_TEXTBOX, nullptr, nullptr);
 
+        hPrevBtn = CreateWindowW(L"BUTTON", L"<", 
+            WS_VISIBLE | WS_CHILD, 
+            570, 170, 40, 25, 
+            hwnd, (HMENU)ID_LEFT_PAGE, nullptr, nullptr);
+
+        hPageCounter = CreateWindowW(L"STATIC", L"Page: 0/0", 
+            WS_VISIBLE | WS_CHILD | SS_CENTER, 
+            615, 175, 100, 20, 
+            hwnd, nullptr, nullptr, nullptr);
+
+        hNextBtn = CreateWindowW(L"BUTTON", L">", 
+            WS_VISIBLE | WS_CHILD, 
+            720, 170, 40, 25, 
+            hwnd, (HMENU)ID_RIGHT_PAGE, nullptr, nullptr);
+        
+        CreateWindowW(L"STATIC", L"Page size (words or symbols):",
+            WS_VISIBLE | WS_CHILD,
+            570, 210, 250, 20,
+            hwnd, nullptr, nullptr, nullptr);
+
         hPageSize = CreateWindowW(L"EDIT", L"10",
             WS_VISIBLE | WS_CHILD | WS_BORDER,
-            570, 180, 100, 25,
+            570, 235, 100, 25,
             hwnd, (HMENU)ID_PAGESIZE, nullptr, nullptr);
 
         hWordsRadio = CreateWindowW(L"BUTTON", L"Words",
             WS_VISIBLE | WS_CHILD | WS_GROUP | BS_AUTORADIOBUTTON,
-            570, 220, 100, 25,
+            570, 270, 100, 25,
             hwnd, (HMENU)ID_WORDS_RADIO, nullptr, nullptr);
 
         hCharsRadio = CreateWindowW(L"BUTTON", L"Symbols",
             WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
-            680, 220, 100, 25,
+            680, 270, 100, 25,
             hwnd, (HMENU)ID_CHARS_RADIO, nullptr, nullptr);
 
         SendMessage(hWordsRadio, BM_SETCHECK, BST_CHECKED, 0);
 
         CreateWindowW(L"BUTTON", L"Process",
             WS_VISIBLE | WS_CHILD,
-            570, 260, 120, 30,
+            570, 310, 120, 35,
             hwnd, (HMENU)ID_PROCESS_BTN, nullptr, nullptr);
 
         CreateWindowW(L"BUTTON", L"Load file",
             WS_VISIBLE | WS_CHILD,
-            700, 260, 120, 30,
+            700, 310, 120, 35,
             hwnd, (HMENU)ID_LOAD_BTN, nullptr, nullptr);
 
         CreateWindowW(L"BUTTON", L"Run Tests",
             WS_VISIBLE | WS_CHILD,
-            570, 300, 250, 30,
+            570, 355, 250, 35,
             hwnd, (HMENU)ID_TESTS_BTN, nullptr, nullptr);
         break;
 
@@ -327,8 +325,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             TestAll(); 
             MessageBoxW(hwnd, L"Tests completed! Check console output.", L"Tests", MB_OK | MB_ICONINFORMATION);
             break;
+            
+        case ID_LEFT_PAGE:
+            if (current_view_page > 1) { current_view_page--; UpdatePageDisplay(); }
+            break;
+
+        case ID_RIGHT_PAGE:
+            if (current_view_page < myBook.GetTotalPages()) { current_view_page++; UpdatePageDisplay(); }
+            break;
         }
         break;
+    case WM_NOTIFY: {
+            LPNMHDR nmhdr = (LPNMHDR)lParam;
+            if (nmhdr->idFrom == 1 && nmhdr->code == LVN_COLUMNCLICK) {
+                LPNMLISTVIEW pnmv = (LPNMLISTVIEW)lParam;
+                sort_by_page = (pnmv->iSubItem == 1);
+                FillListView(hListView);
+            }
+            break;
+        }
 
     case WM_DESTROY:
         PostQuitMessage(0);
